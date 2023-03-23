@@ -1,9 +1,6 @@
-import {
-  Request, Response, NextFunction,
-} from 'express';
-import { getCustomRepository } from 'typeorm';
-import { UserRepository } from '../repositories';
+import { Request, Response, NextFunction } from 'express';
 import { User } from '../DTOs';
+import prisma from '../database/client';
 
 class UserController {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -15,17 +12,10 @@ class UserController {
         password,
       } = req.body;
 
-      const userRepository = getCustomRepository(UserRepository);
-
       const userData = {
         name,
         phone,
         email,
-        password,
-      };
-
-      const { error } = User.validate(userData);
-
       if (error) {
         return next({
           status: 400,
@@ -33,7 +23,7 @@ class UserController {
         });
       }
 
-      const checkEmail = await userRepository.findByEmail(email);
+      const checkEmail = await prisma.user.findUnique({ where: { email } });
 
       if (checkEmail) {
         return next({
@@ -42,7 +32,7 @@ class UserController {
         });
       }
 
-      const user = await userRepository.save(userData);
+      const user = await prisma.user.create({ data: userData });
 
       res.locals = {
         status: 201,
@@ -60,8 +50,9 @@ class UserController {
     try {
       const { userId } = req.params;
 
-      const userRepository = getCustomRepository(UserRepository);
-      const user = await userRepository.findById(userId);
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
 
       if (!user) {
         return next({
@@ -70,16 +61,63 @@ class UserController {
         });
       }
 
-      if (user === 'ERROR') {
+      res.locals = {
+        status: 200,
+        data: user,
+      };
+
+      return next();
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async update(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId } = req.params;
+      const newUser = req.body;
+
+      const user = await prisma.user.update({
+        where: { id: userId },
+        data: newUser,
+      });
+
+      if (!user) {
         return next({
-          status: 400,
-          message: 'Incorrect parameters',
+          status: 404,
+          message: 'User not found',
         });
       }
 
       res.locals = {
         status: 200,
         data: user,
+      };
+
+      return next();
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async delete(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId } = req.params;
+
+      const user = await prisma.user.delete({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        return next({
+          status: 404,
+          message: 'User not found',
+        });
+      }
+
+      res.locals = {
+        status: 200,
+        message: 'User deleted',
       };
 
       return next();
